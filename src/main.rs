@@ -1,19 +1,21 @@
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{prelude::*, BufReader};
 use std::path::Path;
+use walkdir::WalkDir;
 use zip::{write::FileOptions, CompressionMethod};
 
 fn main() {
     // create_kmz_file("faster.kmz").unwrap();
     // read_kmz_file("faster.kmz");
     create_kmz_base("src/output/", "fasternet", "Teste de KMZ");
+    create_kmz_file("src/output_kmz/", "fasternet");
 }
 
 fn create_kmz_base(path: &str, name: &str, description: &str) {
     // Check if kmz folder with name alerady exists
     match Path::new(path).join(name).exists() {
         true => {
-            println!("kmz {} dir already exists", name);
+            // println!("kmz {} dir already exists", name);
         }
         false => {
             let base_path = Path::new(path).join(name);
@@ -47,24 +49,46 @@ fn create_kmz_base(path: &str, name: &str, description: &str) {
     }
 }
 
-fn create_kmz_file(filename: &str) -> zip::result::ZipResult<()> {
-    let path = Path::new(filename);
-    let file = File::create(path).unwrap();
+fn create_kmz_file(path: &str, filename: &str) {
+    match Path::new("src/output").join(filename).exists() {
+        true => {
+            let path = Path::new("src/output_kmz").join(String::from(filename) + ".kmz");
+            let file: File = File::create(path).unwrap();
+            let kmz_dir = WalkDir::new(String::from("src/output") + "/" + filename)
+                .min_depth(1)
+                .into_iter()
+                .filter_map(|e| e.ok());
 
-    let mut zip = zip::ZipWriter::new(file);
+            let mut zip = zip::ZipWriter::new(&file);
 
-    zip.add_directory("files/", Default::default())?;
+            let options = FileOptions::default()
+                .compression_method(CompressionMethod::Stored)
+                .unix_permissions(0o755);
 
-    let options = FileOptions::default()
-        .compression_method(CompressionMethod::Stored)
-        .unix_permissions(0o755);
+            for entry in kmz_dir {
+                if entry.file_type().is_file() {
+                    let file_content = fs::read(entry.path()).unwrap();
+                    zip.start_file(entry.file_name().to_str().unwrap(), options)
+                        .unwrap();
+                    zip.write_all(&file_content).unwrap();
+                }
+            }
 
-    zip.start_file("files/success.txt", options)?;
-    zip.write_all(b"Success zip created\n")?;
+            // zip.add_directory("files/", Default::default()).unwrap();
 
-    zip.finish()?;
+            // let options = FileOptions::default()
+            //     .compression_method(CompressionMethod::Stored)
+            //     .unix_permissions(0o755);
 
-    Ok(())
+            // zip.start_file("files/success.txt", options).unwrap();
+            // zip.write_all(b"Success zip created\n").unwrap();
+
+            // zip.finish().unwrap();
+        }
+        false => {
+            println!("kmz {} dir  not exists", filename);
+        }
+    }
 }
 
 fn read_kmz_file(filename: &str) {
